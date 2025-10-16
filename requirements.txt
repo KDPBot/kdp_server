@@ -1,0 +1,10 @@
+fastapi
+pydantic
+beautifulsoup4
+lxml
+uvicorn
+streamlit
+pandas
+asyncpg
+psycopg2-binary
+requests

@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from bs4 import BeautifulSoup
+from database import init_db, add_royalty_data, get_all_royalties
 
 # --- 1. Define the structure of the incoming data ---
 class KDPPayload(BaseModel):
@@ -11,6 +12,10 @@ class KDPPayload(BaseModel):
 
 # --- 2. Initialize the FastAPI app and CORS ---
 app = FastAPI()
+
+@app.on_event("startup")
+async def on_startup():
+    await init_db()
 
 origins = ["*"]
 app.add_middleware(
@@ -76,10 +81,24 @@ async def parse_kdp_html(payload: KDPPayload):
         print("Successfully extracted data:")
         print(extracted_data)
 
-        # TODO: Save the extracted_data to your database here.
+        # Save the extracted_data to the database
+        await add_royalty_data(payload.accountIdentifier, extracted_data)
 
         return {"status": "success", "data": extracted_data}
 
     except Exception as e:
         print(f"Error parsing HTML: {e}")
+        return {"status": "error", "message": str(e)}
+
+# --- 4. Create the endpoint to fetch all royalty data ---
+@app.get("/api/royalties")
+async def get_royalties():
+    """
+    This endpoint fetches all royalty data from the database.
+    """
+    try:
+        data = await get_all_royalties()
+        return {"status": "success", "data": data}
+    except Exception as e:
+        print(f"Error fetching royalties: {e}")
         return {"status": "error", "message": str(e)}
