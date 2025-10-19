@@ -5,7 +5,7 @@ import os
 import re
 
 # --- 1. Get the API base URL from environment variables ---
-API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:8000")
+API_BASE_URL = os.environ.get("DATABASE_URL", "http://localhost:8000")
 
 # --- 2. Function to fetch data from the FastAPI backend ---
 def fetch_data():

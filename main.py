@@ -49,6 +49,11 @@ async def parse_kdp_html(payload: KDPPayload):
         table_rows = soup.select("div.ui.items.no-margin.unstackable > div.item")
 
         for row in table_rows:
+            # Check if the row is a book entry by looking for a book cover image
+            if not row.select_one("img"):
+                print("Skipping summary row...")
+                continue
+
             # Find the element containing the book title or summary title (e.g., "All 5 books")
             title_element = row.select_one(".truncate-overflow")
             title = title_element.get_text(strip=True) if title_element else "Title Not Found"
