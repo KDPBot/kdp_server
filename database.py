@@ -19,6 +19,7 @@ async def init_db():
 
     conn = await asyncpg.connect(DATABASE_URL)
     try:
+        # Ensure the table exists, without the updated_at column initially
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS royalties (
                 id SERIAL PRIMARY KEY,
@@ -26,6 +27,31 @@ async def init_db():
                 book_title VARCHAR(255) NOT NULL,
                 total_royalties VARCHAR(255) NOT NULL
             )
+        """)
+
+        # Add the updated_at column if it doesn't exist
+        await conn.execute(
+            "ALTER TABLE royalties ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP"
+        )
+
+        # The trigger function to automatically update the timestamp
+        await conn.execute("""
+            CREATE OR REPLACE FUNCTION update_updated_at_column()
+            RETURNS TRIGGER AS $$
+            BEGIN
+               NEW.updated_at = now();
+               RETURN NEW;
+            END;
+            $$ language 'plpgsql';
+        """)
+
+        # Drop the trigger if it exists, then create it
+        await conn.execute("DROP TRIGGER IF EXISTS update_royalties_updated_at ON royalties;")
+        await conn.execute("""
+            CREATE TRIGGER update_royalties_updated_at
+            BEFORE UPDATE ON royalties
+            FOR EACH ROW
+            EXECUTE PROCEDURE update_updated_at_column();
         """)
         print("Database initialized successfully.")
     finally:
@@ -70,7 +96,7 @@ async def get_all_royalties():
 
     conn = await asyncpg.connect(DATABASE_URL)
     try:
-        records = await conn.fetch("SELECT vps_name, book_title, total_royalties FROM royalties")
+        records = await conn.fetch("SELECT vps_name, book_title, total_royalties, updated_at FROM royalties")
         return [dict(record) for record in records]
     finally:
         await conn.close()

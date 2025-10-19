@@ -43,11 +43,20 @@ def main():
     # Fetch and clean the data
     raw_data = fetch_data()
     
+    if not raw_data.empty and "updated_at" in raw_data.columns:
+        # Get the most recent updated_at timestamp
+        last_updated = pd.to_datetime(raw_data["updated_at"]).max()
+        st.caption(f"Last Updated: {last_updated.strftime('%d/%m/%Y at %I:%M %p %Z')}")
+    
     if raw_data.empty:
         st.warning("No data found. Please ensure the FastAPI backend is running and has processed some data.")
         return
 
     cleaned_data = clean_royalty_data(raw_data)
+
+    # Convert updated_at to datetime objects for proper formatting
+    if 'updated_at' in cleaned_data.columns:
+        cleaned_data['updated_at'] = pd.to_datetime(cleaned_data['updated_at'])
 
     # --- Sidebar for Filtering ---
     st.sidebar.header("Filter Data")
@@ -85,7 +94,10 @@ def main():
 
         # --- Data Table ---
         st.subheader("Detailed Data")
-        st.dataframe(filtered_data.style.format({"total_royalties": "${:,.2f}"}))
+        st.dataframe(filtered_data.style.format({
+            "total_royalties": "${:,.2f}",
+            "updated_at": '{:%d/%m/%Y at %I:%M %p %Z}'
+        }))
     else:
         st.info("No data available for the selected filters.")
 
