@@ -1,35 +1,128 @@
-import requests
-import json
+import pytest
+import pytest_asyncio
+import pytest
+import pytest_asyncio
+from httpx import AsyncClient, ASGITransport
+from sqlmodel import SQLModel
+from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
+from app.main import app
+from app.db.session import get_session
+from app.models.portfolio import Portfolio
+from app.schemas.kdp import KDPPayload
 
-# Sample HTML content for testing the portfolio parsing
-html_content = """
-</div></div><span class="sc-storm-ui-40024312__sc-4z7sux-0 iwIdGE"><button aria-label="Open tooltip" type="button" aria-haspopup="dialog" class="sc-storm-ui-40024312__sc-dc6urg-0 sc-storm-ui-40024312__sc-dc6urg-1 efBgFa dFTFnW"><i class="sc-storm-ui-40024312__sc-1gsqp3h-1 bmpIOl sc-storm-ui-40024312__sc-dc6urg-2 kVrmye" data-testid="storm-ui-icon-info-circle"><svg aria-hidden="true" fill="none" viewBox="0 0 32 32" class="sc-storm-ui-40024312__sc-1gsqp3h-0 gpcOeG fas fa-info-circle" data-fa-i2svg=""><path fill="currentColor" d="M16 30C23.73 30 30 23.73 30 16C30 8.27 23.73 2 16 2C8.27 2 2 8.27 2 16C2 23.73 8.27 30 16 30ZM20.75 21.3637V24.9818L11.75 25V21.3637H14.4309V16.1064H11.75V12.5429H18.2606V21.3637H20.75ZM13.7549 8.42553C13.7549 7.08543 14.7909 6 16.0681 6C17.3453 6 18.3813 7.08543 18.3813 8.42553C18.3813 9.76564 17.3453 10.8511 16.0681 10.8511C14.7909 10.8511 13.7549 9.76564 13.7549 8.42553Z"></path></svg></i></button></span></div></span></span></span></div></div></div></div><div style="height: 30px; left: 0px; position: absolute; top: 50px; width: 105px;" data-e2e-id="tableCell_summary_status" data-e2e-index="cellIndex_summary_1" data-udt-column-id="status-summary" class="sc-jxllNA iqzjfr"><span></span></div><div style="height: 30px; left: 105px; position: absolute; top: 50px; width: 185px;" data-e2e-id="tableCell_summary_budget" data-e2e-index="cellIndex_summary_2" data-udt-column-id="budget-summary" class="sc-jxllNA iqzjfr"><span></span></div><div style="height: 30px; left: 290px; position: absolute; top: 50px; width: 125px;" data-e2e-id="tableCell_summary_budgetStartDate" data-e2e-index="cellIndex_summary_3" data-udt-column-id="budgetStartDate-summary" class="sc-jxllNA iqzjfr"><span></span></div><div style="height: 30px; left: 415px; position: absolute; top: 50px; width: 125px;" data-e2e-id="tableCell_summary_budgetEndDate" data-e2e-index="cellIndex_summary_4" data-udt-column-id="budgetEndDate-summary" class="sc-jxllNA iqzjfr"><span></span></div><div style="height: 30px; left: 540px; position: absolute; top: 50px; width: 105px;" data-e2e-id="tableCell_summary_spend" data-e2e-index="cellIndex_summary_5" data-udt-column-id="spend-summary" class="sc-jxllNA iqzjfr"><div class="styles-module__baseCellStyles_VxPntQ0I6YzClYStXxBm styles-module__hideOverflow_C16MGsAZ31g11z4fc3a6 styles-module__baseSummaryPadding__n3yNmEKHqGFO5lD3kn2"><div data-e2e-id="currencyRenderer" class="sc-pYOYC fXMHSK">$61.66<br></div></div></div><div style="height: 30px; left: 645px; position: absolute; top: 50px; width: 105px;" data-e2e-id="tableCell_summary_orders" data-e2e-index="cellIndex_summary_6" data-udt-column-id="orders-summary" class="sc-jxllNA iqzjfr"><div class="styles-module__baseCellStyles_VxPntQ0I6YzClYStXxBm styles-module__hideOverflow_C16MGsAZ31g11z4fc3a6 styles-module__baseSummaryPadding__n3yNmEKHqGFO5lD3kn2"><div data-e2e-id="numberRenderer" class="sc-pIVsU fBycfn">5<br></div></div></div></div></div></div></div><div style="height: 50px; overflow: visible; position: relative; width: 1203px;"><div class="BottomLeftGrid_ScrollWrapper" style="left: 0px; overflow: hidden; position: absolute; height: 50px; width: 472px;"><div aria-label="grid" aria-readonly="true" class="ReactVirtualized__Grid" role="grid" style="box-sizing: border-box; direction: ltr; height: 50px; position: absolute; width: 472px; will-change: transform; overflow: hidden auto; left: 0px;"><div class="ReactVirtualized__Grid__innerScrollContainer" role="rowgroup" style="width: 472px; height: 50px; max-width: 472px; max-height: 50px; overflow: hidden; position: relative;"><div style="height: 50px; left: 0px; position: absolute; top: 0px; width: 472px;" data-e2e-id="tableCell_cell_name" data-e2e-index="cellIndex_0_0" data-udt-column-id="name-cell" class="sc-jxllNA iqzjfr"><div class="styles-module__baseCellStyles_VxPntQ0I6YzClYStXxBm styles-module__hideOverflow_C16MGsAZ31g11z4fc3a6 styles-module__baseCellPadding_Dnk1Q6U3xO4ozhbHZk6p"><div><input type="hidden" id="campaign-name-A262GKTNS7B93Y" value="campaign-name-A262GKTNS7B93Y"><a data-e2e-id="entityNameRenderer" title="01 - National Registry Paramedic Study Guide" id="A262GKTNS7B93Y" intl="[object Object]" class="sc-qPNpY gUSggg" href="/cm/portfolios/A262GKTNS7B93Y">01 - National Registry Paramedic Study Guide</a></div></div></div></div></div></div><div aria-label="grid" aria-readonly="true" class="ReactVirtualized__Grid styles-module__bottomRightGridStyle_J1OWmZwvRdQwPXyG9a7_" role="grid" style="box-sizing: border-box; direction: ltr; height: 50px; position: absolute; will-change: transform; overflow: auto hidden; left: 472px; width: 731px;" tabindex="0"><div class="ReactVirtualized__Grid__innerScrollContainer" role="rowgroup" style="width: 1150px; height: 50px; max-width: 1150px; max-height: 50px; overflow: hidden; position: relative;"><div style="height: 50px; left: 0px; position: absolute; top: 0px; width: 105px;" data-e2e-id="tableCell_cell_status" data-e2e-index="cellIndex_0_1" data-udt-column-id="status-cell" class="sc-jxllNA iqzjfr"><div class="styles-module__baseCellStyles_VxPntQ0I6YzClYStXxBm styles-module__hideOverflow_C16MGsAZ31g11z4fc3a6 styles-module__baseCellPadding_Dnk1Q6U3xO4ozhbHZk6p"><div data-e2e-id="statusText" title="Delivering" class="sc-fzqNJr iIkvJC">Delivering</div></div></div><div style="height: 50px; left: 105px; position: absolute; top: 0px; width: 185px;" data-e2e-id="tableCell_cell_budget" data-e2e-index="cellIndex_0_2" data-udt-column-id="budget-cell" class="sc-jxllNA iqzjfr"><div class="styles-module__baseCellStyles_VxPntQ0I6YzClYStXxBm"></div></div><div style="height: 50px; left: 290px; position: absolute; top: 0px; width: 125px;" data-e2e-id="tableCell_cell_budgetStartDate" data-e2e-index="cellIndex_0_3" data-udt-column-id="budgetStartDate-cell" class="sc-jxllNA iqzjfr"><div class="styles-module__baseCellStyles_VxPntQ0I6YzClYStXxBm"></div></div><div style="height: 50px; left: 415px; position: absolute; top: 0px; width: 125px;" data-e2e-id="tableCell_cell_budgetEndDate" data-e2e-index="cellIndex_0_4" data-udt-column-id="budgetEndDate-cell" class="sc-jxllNA iqzjfr"><div class="styles-module__baseCellStyles_VxPntQ0I6YzClYStXxBm"></div></div><div style="height: 50px; left: 540px; position: absolute; top: 0px; width: 105px;" data-e2e-id="tableCell_cell_spend" data-e2e-index="cellIndex_0_5" data-udt-column-id="spend-cell" class="sc-jxllNA iqzjfr"><div class="styles-module__baseCellStyles_VxPntQ0I6YzClYStXxBm styles-module__hideOverflow_C16MGsAZ31g11z4fc3a6 styles-module__baseCellPadding_Dnk1Q6U3xO4ozhbHZk6p"><div data-e2e-id="currencyRenderer" class="sc-pYOYC fXMHSK">$61.66<br></div></div></div><div style="height: 50px; left: 645px; position: absolute; top: 0px; width: 105px;" data-e2e-id="tableCell_cell_orders" data-e2e-index="cellIndex_0_6" data-udt-column-id="orders-cell" class="sc-jxllNA iqzjfr"><div class="styles-module__baseCellStyles_VxPntQ0I6YzClYStXxBm styles-module__hideOverflow_C16MGsAZ31g11z4fc3a6 styles-module__baseCellPadding_Dnk1Q6U3xO4ozhbHZk6p"><div data-e2e-id="numberRenderer" class="sc-pIVsU fBycfn">5<br></div></div></div></div></div></div></div></div></div><div data-e2e-id="tablePagination" class="sc-khBxaG gGqEah"><div class="sc-jIcOXb iFguEv">Go to page</div><div class="sc-jxthLd ftmfrA"><div class="sc-storm-ui-20054311__sc-1sj9x5i-3 ZfyLx"><label class="sc-storm-ui-20054311__sc-1k6rooo-0 zJGnK" for="UCM-CM-APP:ALL_PORTFOLIOS:pagination-input">Numeric</label><div class="sc-storm-ui-20054311__sc-1sj9x5i-1 dneLqj"><input type="text" pattern="[0-9]" data-e2e-id="input" placeholder="" id="UCM-CM-APP:ALL_PORTFOLIOS:pagination-input" class="sc-storm-ui-20054311__sc-1sj9x5i-0 dpVAsc" value="1"></div></div></div><div class="sc-jCLXRk iliBpa"><button data-e2e-id="prevButton" disabled="" type="button" class="sc-storm-ui-20054311__sc-d3w8xm-0 pqNva"><i data-testid="storm-ui-icon-angle-left" class="sc-storm-ui-20054311__sc-1vzu9xb-0 fryKXz"><svg viewBox="0 0 256 512" class="sc-storm-ui-20054311__sc-1gsqp3h-0 gIvaPQ fas fa-angle-left" data-fa-i2svg=""><path fill="currentColor" d="M237.04 79.88a37.42 37.42 0 0 1 0 52.91L113.84 256l123.2 123.2a37.42 37.42 0 0 1-52.91 52.93L8 256 184.13 79.87a37.42 37.42 0 0 1 52.91 0Z"></path></svg></i></button><button data-e2e-id="nextButton" disabled="" type="button" class="sc-storm-ui-20054311__sc-d3w8xm-0 pqNva"><i data-testid="storm-ui-icon-angle-right" class="sc-storm-ui-20054311__sc-1vzu9xb-0 fryKXz"><svg viewBox="0 0 256 512" class="sc-storm-ui-20054311__sc-1gsqp3h-0 gIvaPQ fas fa-angle-right" data-fa-i2svg=""><path fill="currentColor" d="M18.96 432.13a37.42 37.42 0 0 1 0-52.92L142.16 256 18.97 132.78a37.42 37.42 0 0 1 52.91-52.91L248 256 71.87 432.13a37.42 37.42 0 0 1-52.91 0Z"></path></svg></i></button></div><div class="sc-jIcOXb iFguEv">1 - 1&nbsp;of&nbsp;<span>1</span>&nbsp;result&nbsp;</div><div class="sc-jNvFdi jXuAqb"><div class="sc-storm-ui-20054311__sc-amnlzo-3 cJvlXZ"><button data-e2e-id="dropdown" aria-haspopup="listbox" aria-label=" Results per page: 50" aria-invalid="false" class="sc-storm-ui-20054311__sc-d3w8xm-0 pqNva sc-storm-ui-20054311__sc-amnlzo-2 jhsBjP" type="button"><div class="sc-storm-ui-20054311__sc-amnlzo-1 ervfEb">Results per page: 50</div><i class="sc-storm-ui-20054311__sc-1gsqp3h-1 bxDeVd sc-storm-ui-20054311__sc-amnlzo-0 bOlJzs" data-testid="storm-ui-icon-angle-down"><svg viewBox="0 0 389 512" class="sc-storm-ui-20054311__sc-1gsqp3h-0 gIvaPQ fas fa-angle-down" data-fa-i2svg=""><path fill="currentColor" d="M18.93 147.3a37.3 37.3 0 0 1 52.75 0L194.5 270.12 317.33 147.3a37.3 37.3 0 1 1 52.75 52.75L194.5 375.62 18.93 200.06a37.3 37.3 0 0 1 0-52.75Z"></path></svg></i></button></div></div></div></div></div></div></div></div>
-"""
+# Use an in-memory SQLite database for testing
+DATABASE_URL = "sqlite+aiosqlite:///./test_portfolio.db"
+engine: AsyncEngine = create_async_engine(DATABASE_URL, echo=True)
 
-# The data you want to send
-payload = {
-    "accountIdentifier": "K1",
-    "htmlContent": html_content
-}
+async def create_db_and_tables():
+    async with engine.begin() as conn:
+        await conn.run_sync(SQLModel.metadata.create_all)
 
-api_url = "http://127.0.0.1:8000/api/parse_portfolios"
+async def drop_db_and_tables():
+    async with engine.begin() as conn:
+        await conn.run_sync(SQLModel.metadata.drop_all)
 
-try:
-    # Use the `json` parameter.
-    # The `requests` library automatically converts the Python dict to a
-    # correctly formatted and escaped JSON string.
-    response = requests.post(api_url, json=payload)
+@pytest_asyncio.fixture(name="session")
+async def session_fixture():
+    await create_db_and_tables()
+    async with AsyncSession(engine) as session:
+        yield session
+    await drop_db_and_tables()
 
-    # Raise an exception for bad status codes (4xx or 5xx)
-    response.raise_for_status()
+@pytest_asyncio.fixture(name="client")
+async def client_fixture(session: AsyncSession):
+    def get_session_override():
+        return session
 
-    print(f"Success! Status Code: {response.status_code}")
-    print("Response JSON:")
-    print(response.json())
+    app.dependency_overrides[get_session] = get_session_override
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        yield client
+    app.dependency_overrides.clear()
 
-except requests.exceptions.HTTPError as err:
-    print(f"HTTP Error: {err}")
-    print("Response Body:")
-    print(response.text)
-except requests.exceptions.RequestException as err:
-    print(f"Request Error: {err}")
+@pytest.mark.asyncio
+async def test_parse_portfolio_html(client: AsyncClient):
+    html_content = """
+    <div style="height: 50px; overflow: visible; position: relative; width: 1203px;">
+        <div class="BottomLeftGrid_ScrollWrapper" style="left: 0px; overflow: hidden; position: absolute; height: 50px; width: 472px;">
+            <div aria-label="grid" aria-readonly="true" class="ReactVirtualized__Grid" role="grid" style="box-sizing: border-box; direction: ltr; height: 50px; position: absolute; width: 472px; will-change: transform; overflow: hidden auto; left: 0px;">
+                <div class="ReactVirtualized__Grid__innerScrollContainer" role="rowgroup" style="width: 472px; height: 50px; max-width: 472px; max-height: 50px; overflow: hidden; position: relative;">
+                    <div style="height: 50px; left: 0px; position: absolute; top: 0px; width: 472px;" data-e2e-id="tableCell_cell_name" data-e2e-index="cellIndex_0_0" data-udt-column-id="name-cell" class="sc-jxllNA iqzjfr">
+                        <div class="styles-module__baseCellStyles_VxPntQ0I6YzClYStXxBm styles-module__hideOverflow_C16MGsAZ31g11z4fc3a6 styles-module__baseCellPadding_Dnk1Q6U3xO4ozhbHZk6p">
+                            <div>
+                                <a data-e2e-id="entityNameRenderer" title="01 - National Registry Paramedic Study Guide" id="A262GKTNS7B93Y" intl="[object Object]" class="sc-qPNpY gUSggg" href="/cm/portfolios/A262GKTNS7B93Y">Portfolio 1 Name</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div aria-label="grid" aria-readonly="true" class="ReactVirtualized__Grid styles-module__bottomRightGridStyle_J1OWmZwvRdQwPXyG9a7_" role="grid" style="box-sizing: border-box; direction: ltr; height: 50px; position: absolute; will-change: transform; overflow: auto hidden; left: 472px; width: 731px;" tabindex="0">
+            <div class="ReactVirtualized__Grid__innerScrollContainer" role="rowgroup" style="width: 1150px; height: 50px; max-width: 1150px; max-height: 50px; overflow: hidden; position: relative;">
+                <div style="height: 50px; left: 540px; position: absolute; top: 0px; width: 105px;" data-e2e-id="tableCell_cell_spend" data-e2e-index="cellIndex_0_5" data-udt-column-id="spend-cell" class="sc-jxllNA iqzjfr">
+                    <div class="styles-module__baseCellStyles_VxPntQ0I6YzClYStXxBm styles-module__hideOverflow_C16MGsAZ31g11z4fc3a6 styles-module__baseCellPadding_Dnk1Q6U3xO4ozhbHZk6p">
+                        <div data-e2e-id="currencyRenderer" class="sc-pYOYC fXMHSK">$61.66<br></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div style="height: 50px; overflow: visible; position: relative; width: 1203px;">
+        <div class="BottomLeftGrid_ScrollWrapper" style="left: 0px; overflow: hidden; position: absolute; height: 50px; width: 472px;">
+            <div aria-label="grid" aria-readonly="true" class="ReactVirtualized__Grid" role="grid" style="box-sizing: border-box; direction: ltr; height: 50px; position: absolute; width: 472px; will-change: transform; overflow: hidden auto; left: 0px;">
+                <div class="ReactVirtualized__Grid__innerScrollContainer" role="rowgroup" style="width: 472px; height: 50px; max-width: 472px; max-height: 50px; overflow: hidden; position: relative;">
+                    <div style="height: 50px; left: 0px; position: absolute; top: 0px; width: 472px;" data-e2e-id="tableCell_cell_name" data-e2e-index="cellIndex_0_0" data-udt-column-id="name-cell" class="sc-jxllNA iqzjfr">
+                        <div class="styles-module__baseCellStyles_VxPntQ0I6YzClYStXxBm styles-module__hideOverflow_C16MGsAZ31g11z4fc3a6 styles-module__baseCellPadding_Dnk1Q6U3xO4ozhbHZk6p">
+                            <div>
+                                <a data-e2e-id="entityNameRenderer" title="02 - Another Portfolio" id="B123C456D789E012F345" intl="[object Object]" class="sc-qPNpY gUSggg" href="/cm/portfolios/B123C456D789E012F345">Portfolio 2 Name</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div aria-label="grid" aria-readonly="true" class="ReactVirtualized__Grid styles-module__bottomRightGridStyle_J1OWmZwvRdQwPXyG9a7_" role="grid" style="box-sizing: border-box; direction: ltr; height: 50px; position: absolute; will-change: transform; overflow: auto hidden; left: 472px; width: 731px;" tabindex="0">
+            <div class="ReactVirtualized__Grid__innerScrollContainer" role="rowgroup" style="width: 1150px; height: 50px; max-width: 1150px; max-height: 50px; overflow: hidden; position: relative;">
+                <div style="height: 50px; left: 540px; position: absolute; top: 0px; width: 105px;" data-e2e-id="tableCell_cell_spend" data-e2e-index="cellIndex_0_5" data-udt-column-id="spend-cell" class="sc-jxllNA iqzjfr">
+                    <div class="styles-module__baseCellStyles_VxPntQ0I6YzClYStXxBm styles-module__hideOverflow_C16MGsAZ31g11z4fc3a6 styles-module__baseCellPadding_Dnk1Q6U3xO4ozhbHZk6p">
+                        <div data-e2e-id="currencyRenderer" class="sc-pYOYC fXMHSK">$123.45<br></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    """
+    payload = KDPPayload(accountIdentifier="test_account_portfolio", htmlContent=html_content)
+    response = await client.post("/api/portfolios/parse_portfolios", json=payload.model_dump())
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+    assert data[0]["portfolio_name"] == "Portfolio 1 Name"
+    assert data[0]["spend"] == "$61.66"
+    assert data[1]["portfolio_name"] == "Portfolio 2 Name"
+    assert data[1]["spend"] == "$123.45"
+
+@pytest.mark.asyncio
+async def test_get_portfolios(client: AsyncClient, session: AsyncSession):
+    portfolio_data = [
+        Portfolio(
+            account_identifier="test_account_portfolio",
+            portfolio_name="Existing Portfolio 1",
+            spend="$100.00",
+        ),
+        Portfolio(
+            account_identifier="test_account_portfolio",
+            portfolio_name="Existing Portfolio 2",
+            spend="$200.00",
+        ),
+    ]
+    session.add_all(portfolio_data)
+    await session.commit()
+
+    response = await client.get("/api/portfolios/portfolios")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+    assert data[0]["portfolio_name"] == "Existing Portfolio 1"
+    assert data[1]["portfolio_name"] == "Existing Portfolio 2"

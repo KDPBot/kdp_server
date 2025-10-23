@@ -3,8 +3,11 @@ pydantic
 beautifulsoup4
 lxml
 uvicorn
-streamlit
-pandas
 asyncpg
-psycopg2-binary
-requests
+sqlmodel
+httpx
+aiosqlite
+python-jose[jwt]
+passlib[bcrypt]
+email_validator
+pydantic-settings
