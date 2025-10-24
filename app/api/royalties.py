@@ -35,16 +35,20 @@ async def parse_kdp_html(payload: KDPPayload, session: AsyncSession = Depends(ge
             title_element = row.select_one(".truncate-overflow")
             title = title_element.get_text(strip=True) if title_element else "Title Not Found"
 
-            value_elements = row.select(".sixteen.wide.computer.column .row > div")
+            def clean_royalty_value(value):
+                return value.replace('$', '').replace(',', '').strip()
 
-            if len(value_elements) >= 6:
-                ebook_royalties = value_elements[1].get_text(strip=True)
-                print_royalties = value_elements[2].get_text(strip=True)
-                kenp_royalties = value_elements[3].get_text(strip=True)
-                total_royalties = value_elements[4].get_text(strip=True)
-                total_royalties_usd = value_elements[5].get_text(strip=True)
+            # More specific selectors to target each royalty value individually
+            royalty_values = row.select(".sixteen.wide.computer.column .row .right.aligned.column")
+
+            if len(royalty_values) >= 5:
+                ebook_royalties = clean_royalty_value(royalty_values[0].get_text(strip=True))
+                print_royalties = clean_royalty_value(royalty_values[1].get_text(strip=True))
+                kenp_royalties = clean_royalty_value(royalty_values[2].get_text(strip=True))
+                total_royalties = clean_royalty_value(royalty_values[3].get_text(strip=True))
+                total_royalties_usd = clean_royalty_value(royalty_values[4].get_text(strip=True))
             else:
-                ebook_royalties, print_royalties, kenp_royalties, total_royalties, total_royalties_usd = ["N/A"] * 5
+                ebook_royalties, print_royalties, kenp_royalties, total_royalties, total_royalties_usd = ["0.00"] * 5
 
             extracted_data.append({
                 "bookTitle": title,
