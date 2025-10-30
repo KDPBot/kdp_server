@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 from app.db.session import get_session
 from app.schemas.kdp import KDPPayload
 from app.models.portfolio import PortfolioRead
-from app.crud import portfolio_crud
+from app.crud import portfolio_crud, royalty_crud
 
 router = APIRouter()
 
@@ -44,7 +44,29 @@ async def parse_portfolio_html(payload: KDPPayload, session: AsyncSession = Depe
         print("Successfully extracted portfolio data:")
         print(extracted_data)
 
-        portfolios = await portfolio_crud.create_portfolio_data(session, payload.accountIdentifier, extracted_data)
+        # Aggregate data to handle duplicates
+        aggregated_data = {}
+        for item in extracted_data:
+            name = item['portfolio_name']
+            spend_str = item['spend'].replace('$', '').replace(',', '').strip()
+            try:
+                spend = float(spend_str)
+            except ValueError:
+                spend = 0.0
+            
+            if name in aggregated_data:
+                aggregated_data[name]['spend'] += spend
+            else:
+                aggregated_data[name] = {'portfolio_name': name, 'spend': spend}
+        
+        final_data = list(aggregated_data.values())
+        for item in final_data:
+            item['spend'] = f"${item['spend']:,.2f}"
+
+        print("Aggregated portfolio data:")
+        print(final_data)
+
+        portfolios = await portfolio_crud.upsert_portfolio_data(session, payload.accountIdentifier, final_data)
         return portfolios
 
     except Exception as e:
@@ -62,3 +84,17 @@ async def get_portfolios(session: AsyncSession = Depends(get_session)):
     except Exception as e:
         print(f"Error fetching portfolios: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching portfolios: {str(e)}")
+
+
+@router.delete("/portfolios/{account_identifier}")
+async def delete_all_data_by_account_identifier(account_identifier: str, session: AsyncSession = Depends(get_session)):
+    """
+    Deletes all portfolio and royalty data for a given account identifier.
+    """
+    try:
+        await royalty_crud.delete_royalty_by_account_id(session, account_identifier)
+        await portfolio_crud.delete_portfolio_by_account_id(session, account_identifier)
+        return {"message": f"All data for account {account_identifier} has been deleted."}
+    except Exception as e:
+        print(f"Error deleting data for account {account_identifier}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error deleting data for account {account_identifier}: {str(e)}")

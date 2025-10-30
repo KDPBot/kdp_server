@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.db.session import init_db
-from app.api import royalties, portfolios, auth
+from app.api import royalties, portfolios, auth, dashboard
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -36,6 +36,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(royalties.router, prefix="/api", tags=["royalties"])
-app.include_router(portfolios.router, prefix="/api", tags=["portfolios"])
+app.include_router(royalties.router, prefix="/api/royalties", tags=["royalties"])
+app.include_router(portfolios.router, prefix="/api/portfolios", tags=["portfolios"])
+app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
